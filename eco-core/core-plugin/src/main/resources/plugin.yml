@@ -8,6 +8,7 @@ depend:
   - eco
 softdepend:
   - libreforge
+folia-supported: true
 
 commands:
   ecoarmor:
