@@ -2,6 +2,7 @@ package com.willfp.ecoarmor.upgrades
 
 import com.willfp.ecoarmor.api.event.ArmorTierEvent
 import com.willfp.ecoarmor.sets.ArmorUtils
+import com.willfp.ecoarmor.plugin
 import org.bukkit.Bukkit
 import org.bukkit.GameMode
 import org.bukkit.Material
@@ -48,14 +49,34 @@ object CrystalListener : Listener {
             return
         }
 
-        ArmorUtils.setTier(current, crystalTier)
-        if (cursor.amount > 1) {
-            cursor.amount -= 1
-            event.whoClicked.setItemOnCursor(cursor)
-        } else {
-            event.whoClicked.setItemOnCursor(ItemStack(Material.AIR))
-        }
+        // Cancel immediately, then defer item modification to next tick
+        // to avoid triggering synchronous entity attribute recalculation
+        // which can cause ReferenceOpenHashSet corruption in Folia's tracker.
         event.isCancelled = true
+
+        val rawSlot = event.rawSlot
+        val cursorAmount = cursor.amount
+        val view = event.view
+
+        plugin.scheduler.run {
+            if (!player.isOnline) return@run
+
+            // Get fresh references to the items at the clicked slot
+            val currentItem = view.getItem(rawSlot) ?: return@run
+            val cursorItem = player.itemOnCursor
+
+            if (ArmorUtils.getSetOnItem(currentItem) == null) return@run
+
+            ArmorUtils.setTier(currentItem, crystalTier)
+            view.setItem(rawSlot, currentItem)
+
+            if (cursorAmount > 1) {
+                cursorItem.amount -= 1
+                player.setItemOnCursor(cursorItem)
+            } else {
+                player.setItemOnCursor(ItemStack(Material.AIR))
+            }
+        }
     }
 
     @EventHandler
