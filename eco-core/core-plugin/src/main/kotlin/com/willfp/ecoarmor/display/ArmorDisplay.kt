@@ -13,6 +13,7 @@ import com.willfp.libreforge.SimpleProvidedHolder
 import org.bukkit.entity.Player
 import org.bukkit.inventory.ItemStack
 import org.bukkit.inventory.meta.LeatherArmorMeta
+import java.util.Locale
 
 object ArmorDisplay : DisplayModule(plugin, DisplayPriority.LOWEST) {
     override fun display(
@@ -53,7 +54,7 @@ object ArmorDisplay : DisplayModule(plugin, DisplayPriority.LOWEST) {
             set.getAdvancedItemStack(slot)
         } else {
             set.getItemStack(slot)
-        }
+        } ?: return
 
         val slotMeta = slotStack.itemMeta ?: return
 
@@ -64,8 +65,19 @@ object ArmorDisplay : DisplayModule(plugin, DisplayPriority.LOWEST) {
             item = itemStack
         )
 
-        val lore = FastItemStack.wrap(slotStack).lore
-            .map { it.replace("%tier%", tier.displayName) }
+        val isAdvanced = ArmorUtils.isAdvanced(meta)
+
+        val defaultLore = set.config.getSubsection(slot.name.lowercase(Locale.ENGLISH))
+            .getFormattedStrings("lore")
+            .map { Display.PREFIX + it }
+        val advancedLore = set.config.getFormattedStrings("advancedLore")
+            .map { Display.PREFIX + it }
+
+        val lore = (if (isAdvanced) {
+            if (!plugin.configYml.getBool("advanced-lore-only")) defaultLore + advancedLore else advancedLore
+        } else {
+            defaultLore
+        }).map { it.replace("%tier%", tier.displayName) }
             .formatEco(context)
             .toMutableList()
 
@@ -78,7 +90,7 @@ object ArmorDisplay : DisplayModule(plugin, DisplayPriority.LOWEST) {
         if (player != null) {
             val lines = mutableListOf<String>()
 
-            lines.addAll(if (ArmorUtils.isAdvanced(meta)) {
+            lines.addAll(if (isAdvanced) {
                 SimpleProvidedHolder(set.advancedHolder)
                     .getNotMetLines(player)
                     .map { Display.PREFIX + it }

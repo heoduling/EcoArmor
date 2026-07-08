@@ -3,6 +3,7 @@ package com.willfp.ecoarmor.upgrades
 import com.willfp.ecoarmor.api.event.ArmorTierEvent
 import com.willfp.ecoarmor.sets.ArmorUtils
 import com.willfp.ecoarmor.plugin
+import com.willfp.libreforge.SchedulerHelper
 import org.bukkit.Bukkit
 import org.bukkit.GameMode
 import org.bukkit.Material
@@ -58,14 +59,14 @@ object CrystalListener : Listener {
         val cursorAmount = cursor.amount
         val view = event.view
 
-        plugin.scheduler.run {
-            if (!player.isOnline) return@run
+        SchedulerHelper.runTask(plugin, player, Runnable {
+            if (!player.isOnline) return@Runnable
 
             // Get fresh references to the items at the clicked slot
-            val currentItem = view.getItem(rawSlot) ?: return@run
+            val currentItem = view.getItem(rawSlot) ?: return@Runnable
             val cursorItem = player.itemOnCursor
 
-            if (ArmorUtils.getSetOnItem(currentItem) == null) return@run
+            if (ArmorUtils.getSetOnItem(currentItem) == null) return@Runnable
 
             ArmorUtils.setTier(currentItem, crystalTier)
             view.setItem(rawSlot, currentItem)
@@ -76,7 +77,7 @@ object CrystalListener : Listener {
             } else {
                 player.setItemOnCursor(ItemStack(Material.AIR))
             }
-        }
+        })
     }
 
     @EventHandler

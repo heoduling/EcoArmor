@@ -9,6 +9,7 @@ import com.willfp.ecoarmor.upgrades.Tiers
 import com.willfp.libreforge.Holder
 import com.willfp.libreforge.ItemProvidedHolder
 import com.willfp.libreforge.ProvidedHolder
+import com.willfp.libreforge.SchedulerHelper
 import com.willfp.libreforge.SimpleProvidedHolder
 import org.bukkit.NamespacedKey
 import org.bukkit.attribute.Attribute
@@ -20,6 +21,7 @@ import org.bukkit.inventory.ItemStack
 import org.bukkit.inventory.meta.ItemMeta
 import org.bukkit.persistence.PersistentDataType
 import java.util.*
+import java.util.concurrent.ConcurrentHashMap
 
 object ArmorUtils {
 
@@ -28,7 +30,7 @@ object ArmorUtils {
     /**
      * Cache of sets on players.
      */
-    private val setCache = WeakHashMap<Player, CachedSetState>()
+    private val setCache = ConcurrentHashMap<Player, CachedSetState>()
 
     /**
      * Remove a player from the set cache. Called on quit.
@@ -156,22 +158,32 @@ object ArmorUtils {
                 setCache[entity] = newState
 
                 // Defer event firing to next tick to avoid re-entrancy from listeners
+                // Also ensure thread safety in Folia environment
                 val player = entity
                 val oldAdvanced = oldState?.advanced ?: false
-                plugin.scheduler.run {
-                    if (!player.isOnline) return@run
+                
+                // Run on player's entity scheduler to ensure thread safety in Folia
+                SchedulerHelper.runTask(plugin, player, Runnable {
+                    if (!player.isOnline) return@Runnable
 
-                    if (oldState?.set != null) {
-                        plugin.server.pluginManager.callEvent(
-                            PlayerArmorSetUnequipEvent(player, oldState.set, oldAdvanced)
-                        )
+                    // Re-validate state when actually executing to prevent race conditions
+                    val currentState = getSetOnEntity(player)
+                    val currentAdvanced = isWearingAdvanced(player)
+                    
+                    // Only fire events if state still matches expected values
+                    if (currentState == newSet && currentAdvanced == advanced) {
+                        if (oldState?.set != null) {
+                            plugin.server.pluginManager.callEvent(
+                                PlayerArmorSetUnequipEvent(player, oldState.set, oldAdvanced)
+                            )
+                        }
+                        if (newSet != null) {
+                            plugin.server.pluginManager.callEvent(
+                                PlayerArmorSetEquipEvent(player, newSet, advanced)
+                            )
+                        }
                     }
-                    if (newSet != null) {
-                        plugin.server.pluginManager.callEvent(
-                            PlayerArmorSetEquipEvent(player, newSet, advanced)
-                        )
-                    }
-                }
+                })
             }
         }
 

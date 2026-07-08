@@ -24,13 +24,12 @@ import com.willfp.libreforge.SimpleHolder
 import com.willfp.libreforge.ViolationContext
 import com.willfp.libreforge.conditions.Conditions
 import com.willfp.libreforge.effects.Effects
-import com.willfp.libreforge.notNullMutableMapOf
 import org.bukkit.Bukkit
 import org.bukkit.inventory.ItemStack
 import org.bukkit.persistence.PersistentDataType
 import java.util.Locale
 import java.util.Objects
-import java.util.stream.Collectors
+
 
 @Suppress("DEPRECATION")
 class ArmorSet(
@@ -44,16 +43,16 @@ class ArmorSet(
     val regularHolder: Holder
 
     /** Items in set. */
-    private val items = notNullMutableMapOf<ArmorSlot, ItemStack>()
+    private val items = mutableMapOf<ArmorSlot, ItemStack>()
 
     /** Holders in set. */
-    private val slotHolders = notNullMutableMapOf<ArmorSlot, Holder>()
+    private val slotHolders = mutableMapOf<ArmorSlot, Holder>()
 
     /** Items in advanced set. */
-    private val advancedItems = notNullMutableMapOf<ArmorSlot, ItemStack>()
+    private val advancedItems = mutableMapOf<ArmorSlot, ItemStack>()
 
     /** Holders in advanced set. */
-    private val advancedSlotHolders = notNullMutableMapOf<ArmorSlot, Holder>()
+    private val advancedSlotHolders = mutableMapOf<ArmorSlot, Holder>()
 
     /** Advancement shard item. */
     val advancementShardItem: ItemStack
@@ -69,7 +68,7 @@ class ArmorSet(
         else if (config.has("fullSetDisablesPartialSet")) config.getBool("fullSetDisablesPartialSet")
         else true
 
-    val partialHolders = notNullMutableMapOf<Int, Holder>()
+    val partialHolders = mutableMapOf<Int, Holder>()
 
     /** Create a new Armor Set. */
     init {
@@ -110,6 +109,9 @@ class ArmorSet(
 
         for (slot in ArmorSlot.entries) {
             val slotConfig = config.getSubsection(slot.name.lowercase(Locale.ENGLISH))
+            // Skip slots not configured in the set (no item defined).
+            if (!slotConfig.has("item")) continue
+
             val item = construct(slot, slotConfig, false)
             items[slot] = item
             constructRecipe(slot, slotConfig, item)
@@ -192,26 +194,6 @@ class ArmorSet(
                     "name"
                 )
             )
-            val defaultLore = slotConfig.getFormattedStrings("lore").stream().map { s: String -> Display.PREFIX + s }
-                .collect(Collectors.toList())
-            val advancedLore = config.getFormattedStrings("advancedLore").stream()
-                .map { s: String -> Display.PREFIX + s }
-                .collect(Collectors.toList())
-
-            if (advanced) {
-                if (!plugin.configYml.getBool("advanced-lore-only")) {
-                    addLoreLines(defaultLore)
-                }
-                addLoreLines(advancedLore)
-            } else {
-                addLoreLines(defaultLore)
-            }
-
-            setDisplayName {
-                if (advanced) slotConfig.getFormattedString("advancedName") else slotConfig.getFormattedString(
-                    "name"
-                )
-            }
         }
         builder.writeMetaKey(
             plugin.namespacedKeyFactory.create("set"),
@@ -224,10 +206,13 @@ class ArmorSet(
         )
         val itemStack = builder.build()
         setAdvanced(itemStack, advanced)
-        val defaultTier = Tiers.getByID(slotConfig.getString("defaultTier"))
+        val defaultTierId = slotConfig.getString("defaultTier")
+        val defaultTier = if (defaultTierId != null) Tiers.getByID(defaultTierId) else null
         if (defaultTier == null) {
-            Bukkit.getLogger()
-                .warning("Default tier specified in " + id + " " + slot.name.lowercase(Locale.getDefault()) + " is invalid! Defaulting to 'default'")
+            if (defaultTierId != null) {
+                Bukkit.getLogger()
+                    .warning("Default tier specified in " + id + " " + slot.name.lowercase(Locale.getDefault()) + " is invalid! Defaulting to 'default'")
+            }
             setTier(itemStack, Tiers.defaultTier)
         } else {
             setTier(itemStack, defaultTier)
@@ -309,9 +294,9 @@ class ArmorSet(
      * Get item stack from slot.
      *
      * @param slot The slot.
-     * @return The item.
+     * @return The item, or null if the slot is not configured for this set.
      */
-    fun getItemStack(slot: ArmorSlot): ItemStack {
+    fun getItemStack(slot: ArmorSlot): ItemStack? {
         return items[slot]
     }
 
@@ -319,9 +304,9 @@ class ArmorSet(
      * Get item stack from slot.
      *
      * @param slot The slot.
-     * @return The item.
+     * @return The item, or null if the slot is not configured for this set.
      */
-    fun getAdvancedItemStack(slot: ArmorSlot): ItemStack {
+    fun getAdvancedItemStack(slot: ArmorSlot): ItemStack? {
         return advancedItems[slot]
     }
 
@@ -342,9 +327,11 @@ class ArmorSet(
         val advanced = isAdvanced(itemStack)
 
         return if (advanced) {
-            ItemProvidedHolder(advancedSlotHolders[slot], itemStack)
+            val holder = advancedSlotHolders[slot] ?: return null
+            ItemProvidedHolder(holder, itemStack)
         } else {
-            ItemProvidedHolder(slotHolders[slot], itemStack)
+            val holder = slotHolders[slot] ?: return null
+            ItemProvidedHolder(holder, itemStack)
         }
     }
 

@@ -115,10 +115,12 @@ object CommandGive : Subcommand(
                 amount = args[5].toIntOrNull() ?: amount
             }
             for (slot in slots) {
-                val item = (if (advanced) set.getAdvancedItemStack(slot) else set.getItemStack(slot)).clone()
-                val currTier = tier ?: set.getDefaultTier(getSlot(item))
-                ArmorUtils.setTier(item, currTier)
-                toGive.add(item)
+                val item = (if (advanced) set.getAdvancedItemStack(slot) else set.getItemStack(slot))
+                    ?: continue
+                val itemClone = item.clone()
+                val currTier = tier ?: set.getDefaultTier(getSlot(itemClone))
+                ArmorUtils.setTier(itemClone, currTier)
+                toGive.add(itemClone)
             }
 
             val message = plugin.langYml.getMessage("give-success")
