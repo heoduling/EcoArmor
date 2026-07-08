@@ -12,6 +12,7 @@ plugins {
 group = "com.willfp"
 version = findProperty("version")!!
 val libreforgeVersion = findProperty("libreforge-version")
+val ecoVersion = findProperty("eco-version")
 
 base {
     archivesName.set(project.name)
@@ -21,6 +22,58 @@ dependencies {
     project.project(project(":eco-core").path).subprojects {
         implementation(this)
     }
+}
+
+java {
+    withJavadocJar()
+}
+
+publishing {
+    publications {
+        // maven-private: only the shaded jar
+        create<MavenPublication>("private") {
+            artifactId = rootProject.name
+        }
+        // maven-releases + GitHub: full set (none, all, sources, javadoc)
+        create<MavenPublication>("release") {
+            artifactId = rootProject.name
+            from(components["java"])
+        }
+    }
+    repositories {
+        maven {
+            name = "Auxilor"
+            url = uri("https://repo.auxilor.io/repository/maven-private/")
+            credentials {
+                username = System.getenv("MAVEN_USERNAME")
+                password = System.getenv("MAVEN_PASSWORD")
+            }
+        }
+        maven {
+            name = "AuxilorReleases"
+            url = uri("https://repo.auxilor.io/repository/maven-releases/")
+            credentials {
+                username = System.getenv("MAVEN_USERNAME")
+                password = System.getenv("MAVEN_PASSWORD")
+            }
+        }
+    }
+}
+
+afterEvaluate {
+    publishing.publications.named<MavenPublication>("private") {
+        artifact(tasks.named("libreforgeJar"))
+    }
+}
+
+tasks.matching { it.name.startsWith("generatePomFileFor") }.configureEach {
+    mustRunAfter(tasks.named("clean"))
+}
+tasks.register("publishToAuxilor") {
+    dependsOn(
+        "publishPrivatePublicationToAuxilorRepository",
+        "publishReleasePublicationToAuxilorReleasesRepository",
+    )
 }
 
 allprojects {
@@ -39,7 +92,7 @@ allprojects {
     }
 
     dependencies {
-        compileOnly("com.willfp:eco:7.5.0")
+        compileOnly("com.willfp:eco:$ecoVersion")
         compileOnly("org.jetbrains:annotations:26.0.2")
         compileOnly("org.jetbrains.kotlin:kotlin-stdlib:2.3.0")
     }
