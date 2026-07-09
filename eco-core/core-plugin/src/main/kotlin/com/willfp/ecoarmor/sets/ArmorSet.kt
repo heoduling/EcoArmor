@@ -7,7 +7,6 @@ import com.willfp.eco.core.items.Items
 import com.willfp.eco.core.items.builder.ItemBuilder
 import com.willfp.eco.core.items.builder.ItemStackBuilder
 import com.willfp.eco.core.recipe.Recipes
-import com.willfp.eco.core.recipe.recipes.CraftingRecipe
 import com.willfp.eco.core.registry.Registrable
 import com.willfp.ecoarmor.plugin
 import com.willfp.ecoarmor.sets.ArmorSlot.Companion.getSlot
@@ -160,21 +159,21 @@ class ArmorSet(
             .addLoreLines(shardLore)
             .writeMetaKey(plugin.namespacedKeyFactory.create("advancement-shard"), PersistentDataType.STRING, id)
             .build()
-        config.getBool("shard.craftable")
-            .takeIf { it }
-            ?.let {
-                val recipeStrings = config.getStrings("shard.recipe")
-                if (recipeStrings.isEmpty()) return@let null
-
-                Recipes.createAndRegisterRecipe(
-                    plugin,
-                    "${id}_shard",
-                    shard,
-                    recipeStrings,
-                    config.getStringOrNull("shard.crafting-permission"),
-                    config.getBool("shard.shapeless")
-                )
+        if (config.getBool("shard.craftable")) {
+            val recipeStrings = config.getStrings("shard.recipe")
+            if (recipeStrings.isNotEmpty()) {
+                plugin.scheduler.run {
+                    Recipes.createAndRegisterRecipe(
+                        plugin,
+                        "${id}_shard",
+                        shard,
+                        recipeStrings,
+                        config.getStringOrNull("shard.crafting-permission"),
+                        config.getBool("shard.shapeless")
+                    )
+                }
             }
+        }
         CustomItem(
             plugin.namespacedKeyFactory.create("shard_" + id.lowercase(Locale.getDefault())),
             { test: ItemStack? -> test != null && this == getShardSet(test) },
@@ -207,12 +206,10 @@ class ArmorSet(
         val itemStack = builder.build()
         setAdvanced(itemStack, advanced)
         val defaultTierId = slotConfig.getString("defaultTier")
-        val defaultTier = if (defaultTierId != null) Tiers.getByID(defaultTierId) else null
+        val defaultTier = Tiers.getByID(defaultTierId)
         if (defaultTier == null) {
-            if (defaultTierId != null) {
-                Bukkit.getLogger()
-                    .warning("Default tier specified in " + id + " " + slot.name.lowercase(Locale.getDefault()) + " is invalid! Defaulting to 'default'")
-            }
+            Bukkit.getLogger()
+                .warning("Default tier specified in " + id + " " + slot.name.lowercase(Locale.getDefault()) + " is invalid! Defaulting to 'default'")
             setTier(itemStack, Tiers.defaultTier)
         } else {
             setTier(itemStack, defaultTier)
