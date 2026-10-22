@@ -56,8 +56,12 @@ object ArmorUtils {
      */
     @JvmStatic
     fun getSetOnItem(itemStack: ItemStack): ArmorSet? {
-        val meta = itemStack.itemMeta ?: return null
-        return getSetOnItem(meta)
+        // Read only the marker; constructing ItemMeta copies unrelated item data.
+        val setName = itemStack.persistentDataContainer.get(
+            plugin.namespacedKeyFactory.create("set"),
+            PersistentDataType.STRING
+        ) ?: return null
+        return ArmorSets.getByID(setName)
     }
 
     /**
@@ -541,8 +545,10 @@ object ArmorUtils {
      */
     @JvmStatic
     fun isAdvanced(itemStack: ItemStack): Boolean {
-        val meta = itemStack.itemMeta ?: return false
-        return isAdvanced(meta)
+        val container = itemStack.persistentDataContainer
+        val key = plugin.namespacedKeyFactory.create("advanced")
+        return container.has(key, PersistentDataType.INTEGER) &&
+            container.get(key, PersistentDataType.INTEGER) == 1
     }
 
     /**
